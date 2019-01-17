@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	
 )
 
 //-------------------------------------------STRUCTS-------------------------------------------
@@ -91,23 +92,24 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	
 	//empfange Nachrichten von generiere Aufzug, solange welche gesendet werden
 	fmt.Println("steuersimulation vor empfange nachrichten generiege Aufzüge")
-
+	
 	for range channelGA{
 		neuerAufzug := <-channelGA
+		fmt.Println("neuer Aufzug: ", neuerAufzug)
 		aufzugListe = append(aufzugListe, neuerAufzug)	
 	}
 	fmt.Println("steuersimulation NACH empfange nachrichten generiege aufzüge")
 	fmt.Println("aufzugliste:", aufzugListe)
 
 	//starte Simulation
-	for ; dauer > 0; dauer--{ // überwacht gesamtlänge der simulation
+	for ; dauer >= 0; dauer--{ // überwacht gesamtlänge der simulation
 		
 		fmt.Println("steuersimulation:for dauer")
 
 		//erzeuge neue Personen
 		if  maxPers > len(fahrgaesteListe){ //überprüfe ob maximale personenzahl erreicht ist, wenn noch nicht dann...
 			fmt.Println("steuersimulation: if case Personenanzahl")
-			wg.Add(1)
+			//wg.Add(1)
 			//generiere Passagiere
 			go GenerierePassagiere(maxPers - len(fahrgaesteListe), channelGP)// übergibt berechnete maximal erlaubte personenanzahl
 			
@@ -124,10 +126,10 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 		
 		}	
 
-		wg.Add(1)
+		wg2.Add(1)
 		fmt.Println("VOR Algorithmus")
 		// algorithmus aufrufen
-		go Aufzugsteuerungs_Agorithmus_1(channelAlgA, channelAlgP)			
+		go Aufzugsteuerungs_Agorithmus_1(channelAlgA, channelAlgP, maxPers, dauer)			
 
 		fmt.Println("NACH Algorithmus")
 		// auswertung senden
@@ -139,7 +141,7 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 		
 		
 	}
-	wg.Wait()
+	
 	//nach beendigung der simulation
 	// erstelle auswertung	
 		for i := range aufzugListe{
@@ -151,7 +153,9 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 		}
 
 	fmt.Println("HIIIIIIIIIEEEEEEEEEEERRRRRR",fahrgaesteListe)
+	//wg.Wait()
 	
+	wg2.Wait()
 	wg.Done() // DEADLOCK
 	return // gibt auswertung des simulationslaufs zurück
 	
@@ -161,21 +165,20 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 func GeneriereAufzuege (anzA int, channelGA chan Aufzug){
 
 	maxPers := 1 // wieviele dürfen höchstens mitfahren
-	fmt.Println(anzA)
+	fmt.Println("for: anz Aufzüge = äußere schleife:", anzA)
 	for i := 1; anzA >= i; i++{
-		fmt.Println("for: anz Aufzüge = äußere schleife:", anzA)
-			AufzugNr := i
+		
 			
-			fmt.Println("AufzugNr:",AufzugNr)
+			fmt.Println("AufzugNr:",i)
 			
-			neuerAufzug := Aufzug{aufzugNr: AufzugNr, max: maxPers} 
+			neuerAufzug := Aufzug{aufzugNr: i, max: maxPers} 
 			fmt.Println("neuer Aufzug",neuerAufzug)
 			
 			channelGA <- neuerAufzug
 	}
 	
-	close(channelGA)
-	wg.Done()
+	//close(channelGA)
+	//wg.Done()
 }
 
 
@@ -185,7 +188,7 @@ func GeneriereAufzuege (anzA int, channelGA chan Aufzug){
 
 func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an personen je schritt und anzahl etagen geändert werden
 	fmt.Println("Einstieg generiere Passagiere")
-	wg.Add(1)
+	//wg.Add(1)
 	maxAnz := 3
 	
 	if max < 3{ //maximal 3 personen je schritt
@@ -200,7 +203,7 @@ func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an
 		fmt.Println("for: anz Personen = äußere schleife:", anz)
 			startEtage := rand.Intn(4)
 			zielEtage := 0 
-			fmt.Println("startetage: ",startEtage,"zieletage initialisierung",zielEtage)
+			fmt.Println("startetage: ",startEtage,"zieletage:",zielEtage)
 			
 			for ungleich := false; ungleich == false;{ // damit start und zieletage nicht gleich sind
 				zielEtage = rand.Intn(4)
@@ -212,10 +215,10 @@ func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an
 			neueAnfrage := Person{start: startEtage, ziel: zielEtage} // wie macht man einen channel ????????
 			fmt.Println("Generiere Person",neueAnfrage)
 			channelGP <- neueAnfrage
-			wg.Done()		
+			//wg.Done()		
 			
 	}
-	wg.Done()
+	//wg.Done()
 
 }
 
@@ -259,8 +262,8 @@ func goroutineP(channelAlgPerson chan Person, channelAlgAufzug chan Aufzug,event
 	}
 	channelAlgAufzug <- aufzug
 	channelAlgPerson <- fahrgast 
-	wg.Done()
-	wg2.Done()
+	//wg.Done()
+	//wg2.Done()
 
 }
 
@@ -299,23 +302,27 @@ func goroutineA(channelAlgPerson chan Person, channelAlgAufzug chan Aufzug,event
 
 
 	}
-	wg.Done()
-	wg2.Done()
+	//wg.Done()
+	//wg2.Done()
 
 }
 
 
 //----------------------------------------------ALGORITHMUS------------------------------------------------------------------
 
-func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan []Person){
+func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan []Person, maxPers, dauer int){
 	// bekommt anfragen von personen eine je person?
 	// steuert wege der Aufzüge
 	
 	fmt.Println("ALGORITHMUS EINSTIEG")
 	aufzugListe := make([]Aufzug,0)
 	fahrgaesteListe := make([]Person,0)
-	aufzugListe = <- channelAlgA
-	fahrgaesteListe = <- channelAlgP
+	select{
+	case aufzugListe = <- channelAlgA: aufzugListe = <- channelAlgA
+	case fahrgaesteListe = <- channelAlgP: fahrgaesteListe = <- channelAlgP
+	default:
+	}
+	
 	fahrgast := make(chan Person)
 	aufzug := make(chan Aufzug)
 
@@ -327,8 +334,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 			for k:= range fahrgaesteListe{
 
 				if fahrgaesteListe[k].status == 0{ // nehme ersten wartenden fahrgast
-					wg.Add(2)
-					wg2.Add(2)
+					//wg.Add(2)
+					//wg2.Add(2)
 					go goroutineP(fahrgast,aufzug,"aufzug bereit")
 					go goroutineA(fahrgast,aufzug,"aufzug bereit")
 					
@@ -346,8 +353,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 
 			// schritt: aussteigen lassen
 			if aufzugListe[i].etage == fahrgaesteListe[j].ziel && fahrgaesteListe[j].status == 2 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
-				wg.Add(2)
-				wg2.Add(2)
+				//wg.Add(2)
+				//wg2.Add(2)
 				go goroutineP(fahrgast,aufzug,"aussteigen")
 				go goroutineA(fahrgast,aufzug,"aussteigen")
 				fmt.Println("AAAAAAAAAAAAAAAAA")
@@ -356,8 +363,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 
 			// schritt: einsteigen lassen
 			}else if aufzugListe[i].etage == fahrgaesteListe[j].start && fahrgaesteListe[j].status == 1 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
-				wg.Add(2)
-				wg2.Add(2)
+				//wg.Add(2)
+				//wg2.Add(2)
 				go goroutineP(fahrgast,aufzug,"einsteigen")
 				go goroutineA(fahrgast,aufzug,"einsteigen")
 				//wg.wait()	
@@ -365,31 +372,31 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 
 				//schritt: zu anfrage runter fahren
 			}else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug runter fahren
-				wg.Add(1)
-				wg2.Add(1)
+				//wg.Add(1)
+				//wg2.Add(1)
 				go goroutineA(fahrgast,aufzug,"anfrage unten")
 			
 				break
 
 				//schritt: zu anfrage rauf fahren
 			}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug rauf fahren
-				wg.Add(1)
-				wg2.Add(1)
+				//wg.Add(1)
+				//wg2.Add(1)
 				go goroutineA(fahrgast,aufzug,"anfrage oben")
 				
 				break
 				//schritt: zu ziel des gasts runter fahren
 			}else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
-				wg.Add(2)
-				wg2.Add(2)
+				//wg.Add(2)
+				//wg2.Add(2)
 				go goroutineP(fahrgast,aufzug,"ziel unten")
 				go goroutineA(fahrgast,aufzug,"ziel unten")
 				
 				break
 				//schritt: zu ziel des gasts rauf fahren
 			}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
-				wg.Add(2)
-				wg2.Add(2)
+				//wg.Add(2)
+				//wg2.Add(2)
 				go goroutineP(fahrgast,aufzug,"ziel oben")
 				go goroutineA(fahrgast,aufzug,"ziel oben")
 				
@@ -403,20 +410,42 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 		// wartezeiten der fahrgäste setzen
 		for j := range fahrgaesteListe{
 			if fahrgaesteListe[j].status == 0{ // wenn wartend, dann erhöhe wartezeit um 1
-				wg.Add(1)
-				wg2.Add(1)
+				//wg.Add(1)
+				//wg2.Add(1)
 				go goroutineP(fahrgast,aufzug,"wartezeit")
-		
+			
 			
 
 		}
+
+		if dauer == 0{
+			wg2.Done()
+		}else{
+			
+			for j := range fahrgaesteListe{
+				if fahrgaesteListe[j].status != 3{ // wenn noch nicht alle angekommen sind, abbrechen
+				
+					break
+				}
+				if j == len(fahrgaesteListe) - 1{
+					wg2.Done()			// wenn die schleife bis hier hin gelaufen ist, sind alle angekommen
+					break
+				}
+			
+			
+
+			}
+		}
+
+		
+
 		channelAlgP <- fahrgaesteListe
 		channelAlgA <- aufzugListe
 		
 	}
 	//
-	wg2.Wait()
-	wg.Done()
+	//wg2.Wait()
+	//wg.Done()
 }
 
 
