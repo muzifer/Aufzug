@@ -93,7 +93,7 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	//empfange Nachrichten von generiere Aufzug, solange welche gesendet werden
 	fmt.Println("steuersimulation vor empfange nachrichten generiege Aufzüge")
 	
-	for range channelGA{
+	for i:=0;i<anz;i++{
 		neuerAufzug := <-channelGA
 		fmt.Println("neuer Aufzug: ", neuerAufzug)
 		aufzugListe = append(aufzugListe, neuerAufzug)	
@@ -101,21 +101,14 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	fmt.Println("steuersimulation NACH empfange nachrichten generiege aufzüge")
 	fmt.Println("aufzugliste:", aufzugListe)
 
-	//starte Simulation
-	for ; dauer >= 0; dauer--{ // überwacht gesamtlänge der simulation
-		
-		fmt.Println("steuersimulation:for dauer")
 
-		//erzeuge neue Personen
-		if  maxPers > len(fahrgaesteListe){ //überprüfe ob maximale personenzahl erreicht ist, wenn noch nicht dann...
-			fmt.Println("steuersimulation: if case Personenanzahl")
-			//wg.Add(1)
-			//generiere Passagiere
-			go GenerierePassagiere(maxPers - len(fahrgaesteListe), channelGP)// übergibt berechnete maximal erlaubte personenanzahl
+		// erzeuge neue Personen
+			
+go GenerierePassagiere(maxPers, channelGP)// übergibt berechnete maximal erlaubte personenanzahl
 			
 			//empfange Nachrichten von GenerierePassagiere
 			fmt.Println("1000 steuersimulation vor empfange nachrichten generiege Passagiere")
-			for range channelGP{
+			for i:=0;i<maxPers;i++{
 			neueAnfragen := <-channelGP // speichere Nachricht in variabel
 			fahrgaesteListe = append(fahrgaesteListe, neueAnfragen)// hänge neue anfrage an fahrgästeliste an
 			fmt.Println("fahrgästeliste: ", fahrgaesteListe)
@@ -123,25 +116,26 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 			
 			fmt.Println("steuersimulation NACH empfange nachrichten generiege Passagiere")
 			
-		
-		}	
 
-		wg2.Add(1)
+	wg2.Add(1)
+	//starte Simulation
+	for ; dauer >= 0; dauer--{ // überwacht gesamtlänge der simulation
+		
+		fmt.Println("steuersimulation:for dauer")
+
 		fmt.Println("VOR Algorithmus")
 		// algorithmus aufrufen
 		go Aufzugsteuerungs_Agorithmus_1(channelAlgA, channelAlgP, maxPers, dauer)			
 
 		fmt.Println("NACH Algorithmus")
-		// auswertung senden
-		select{
+		// auswertung senden	
+		
+	}
+	select{
 		case aufzugListe = <- channelAlgA:aufzugListe = <- channelAlgA
 		case fahrgaesteListe = <- channelAlgP: fahrgaesteListe = <- channelAlgP
 		default:
 		}
-		
-		
-	}
-	
 	//nach beendigung der simulation
 	// erstelle auswertung	
 		for i := range aufzugListe{
@@ -188,19 +182,9 @@ func GeneriereAufzuege (anzA int, channelGA chan Aufzug){
 
 func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an personen je schritt und anzahl etagen geändert werden
 	fmt.Println("Einstieg generiere Passagiere")
-	//wg.Add(1)
-	maxAnz := 3
-	
-	if max < 3{ //maximal 3 personen je schritt
-		maxAnz = max// zufällige anzahl an passagieren mit zufälligen start und ziel etagen erstellen
+	for ; max > 0; max--{
 		
-	}
-	fmt.Println(maxAnz)
-	anz := rand.Intn(maxAnz)
-	fmt.Println(anz)
-	for ; anz > 0; anz--{
-		
-		fmt.Println("for: anz Personen = äußere schleife:", anz)
+		fmt.Println("for: anz Personen = äußere schleife:", max)
 			startEtage := rand.Intn(4)
 			zielEtage := 0 
 			fmt.Println("startetage: ",startEtage,"zieletage:",zielEtage)
@@ -449,7 +433,7 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 }
 
 
-//--------------------------------------------------------------MAIN---------------------------------------------
+//----------------------------------------------------MAIN--------------------------------------------------
 func main(){	
 	go ZentraleSteuerlogik()
 	wg.Add(1) // wartet auf ein done --> mehr dones = crash
