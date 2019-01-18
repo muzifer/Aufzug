@@ -217,12 +217,18 @@ func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an
 
 func goroutineP(channelAlgPerson, channelAlgPerson2 chan Person, channelAlgAufzug, channelAlgAufzug2 chan Aufzug, maxpers, anz, dauer int ){
 	
-	aufzug := <- channelAlgAufzug
-	fahrgast := <- channelAlgPerson
+	//aufzug := <- channelAlgAufzug
+	//fahrgast := <- channelAlgPerson
 
+	var aufzug Aufzug
+	var fahrgast Person
 	select{ //for i:=0;i<anz*dauer;i++{
 		case msg1 := <- channelAlgAufzug: aufzug = msg1
+		default:
+	}
+	select{ //for i:=0;i<anz*dauer;i++{
 		case msg2 := <- channelAlgPerson: fahrgast = msg2
+		default:
 	}
 
 	switch fahrgast.status {
@@ -262,12 +268,18 @@ func goroutineP(channelAlgPerson, channelAlgPerson2 chan Person, channelAlgAufzu
 
 func goroutineA(channelAlgPerson, channelAlgPerson2 chan Person, channelAlgAufzug, channelAlgAufzug2 chan Aufzug){
 
-	aufzug := <- channelAlgAufzug
-	fahrgast := <- channelAlgPerson
-
+	//aufzug := <- channelAlgAufzug
+	//fahrgast := <- channelAlgPerson
+	var aufzug Aufzug
+	var fahrgast Person
 	select{ //for i:=0;i<anz*dauer;i++{
-		case msg1 := <- channelAlgAufzug: aufzug = msg1
+		case msg1 := <- channelAlgAufzug: 
+			aufzug = msg1
+		default:
+	}
+	select{
 		case msg2 := <- channelAlgPerson: fahrgast = msg2
+		default:
 	}
 	
 	
@@ -323,16 +335,21 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 
 	aufzugListe = <- channelAlgA
 	fahrgaesteListe = <- channelAlgP 
-
+	
 	go goroutineP(chanfahrgast,chan_antwort_fahrgast,chanaufzug,chan_antwort_aufzug, maxPers, anz, dauer)
 	go goroutineA(chanfahrgast,chan_antwort_fahrgast,chanaufzug,chan_antwort_aufzug)
 	
 	for ; dauer >= 0; dauer--{
 		
-		select{
-		case msg1 := <- chan_antwort_aufzug: aufzugListe = append(aufzugListe,msg1)
-		}
-
+		
+		antwort_fahrgast := <- chan_antwort_fahrgast
+		antwort_aufzug := <- chan_antwort_aufzug
+		fahrgaesteListe = append(fahrgaesteListe, antwort_fahrgast)
+		aufzugListe = append(aufzugListe,antwort_aufzug)
+		//select{
+		//)
+		//}
+		
 		for i := range aufzugListe {
 		
 		// planung 
@@ -346,7 +363,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 						fahrgaesteListe[k].status = 11
 						chanfahrgast <- fahrgaesteListe[k]
 						chanaufzug <- aufzugListe[i]
-									
+						fahrgaesteListe = append(fahrgaesteListe[:k], fahrgaesteListe[k:]...)
+						aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
 						break
 					} 
 				}
@@ -362,7 +380,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 					fahrgaesteListe[j].status = 23
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-			
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
 					fmt.Println("AAAAAAAAAAAAAAAAA")
 				
 					break
@@ -374,7 +393,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 					fahrgaesteListe[j].status = 12
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-				
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
 				
 					break
 
@@ -385,7 +405,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 					//fahrgaesteListe[j].status = 1
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
 			
 					break
 
@@ -395,7 +416,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 					//fahrgaesteListe[j].status = 1
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
 				
 					break
 				//schritt: zu ziel des gasts runter fahren
@@ -404,14 +426,17 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 					aufzugListe[i].event = "ziel unten"
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+
 					break
 				//schritt: zu ziel des gasts rauf fahren
 				}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
 					aufzugListe[i].event = "ziel oben"
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
 				
 					break
 				}
@@ -420,13 +445,19 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 			}
 		
 		}
-		
+
+		select{
+			case msg1 := <- chan_antwort_fahrgast: fahrgaesteListe = append(fahrgaesteListe,msg1)
+			case msg2 := <- chan_antwort_aufzug: aufzugListe = append(aufzugListe,msg2)
+			default:
+		}
 
 		// ???????????????????????????????????????????????????????????????????????????????????????????
 		fmt.Println("ALGORTHMUS Fahrgästeliste: ", fahrgaesteListe)
 		fmt.Println("ALGORTHMUS Aufzugliste: ", aufzugListe)
-		if dauer == 0{
-			wg2.Done()
+		
+		/*if dauer == 0{
+			
 		}else{
 			
 			for j := range fahrgaesteListe{
@@ -443,13 +474,15 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA chan []Aufzug, channelAlgP chan 
 
 			}
 		}
-
+		*/
 		
 
-		channelAlgP <- fahrgaesteListe
-		channelAlgA <- aufzugListe
+		
 		
 	}
+		channelAlgP <- fahrgaesteListe
+		channelAlgA <- aufzugListe
+	wg2.Done()
 }
 	
 //}
