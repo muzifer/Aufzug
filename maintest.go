@@ -60,8 +60,8 @@ func ZentraleSteuerlogik() {
 
 	anzahlSimulationsläufe := 1
 	anzahlAufzüge := 4
-	dauer := 20
-	maxPersonen := 3
+	dauer := 100
+	maxPersonen := 10
 
 	// angegebene anzahl von Simulationsläufen aufrufen, auswertung wird als rückgabewert erhalten und an liste angehängt
 	for i := 0; anzahlSimulationsläufe > i; i++{
@@ -100,18 +100,18 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	for i:=0;i<anz;i++{
 		neuerAufzug := <-channelGA
 		aufzugListe = append(aufzugListe, neuerAufzug)
-			channelAlgA <- aufzugListe
+			
 	}
-
+	channelAlgA <- aufzugListe
 	// erzeuge neue Personen
 	GenerierePassagiere(maxPers, channelGP)// übergibt berechnete maximal erlaubte personenanzahl
 	//empfange Nachrichten von GenerierePassagiere
 	for i:=0;i<maxPers;i++{
 		neueAnfragen := <-channelGP // speichere Nachricht in variabel
 		fahrgaesteListe = append(fahrgaesteListe, neueAnfragen)// hänge neue anfrage an fahrgästeliste an
-		channelAlgP <- fahrgaesteListe
+		
 	}
-	
+	channelAlgP <- fahrgaesteListe
 
 	//starte Simulation
 	// überwacht gesamtlänge der simulation
@@ -327,23 +327,27 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 	//Channels um Routinen zu stoppen
 	chanDoneAuf:=make(chan bool,1)
 	chanDonePerRoutine:=make(chan bool,1)
+	/*
 	for ;maxPers > 0; maxPers--{
 		select{
 			case msg := <- channelAlgP: fahrgaesteListe = msg
 			default:
 		}
 
-		//fahrgaesteListe = <- channelAlgP
+		//
 	}
 	for ;anz > 0; anz --{
 		select{
 			case msg := <- channelAlgA: aufzugListe = msg
 			default:
 			}
-			//aufzugListe = <- channelAlgA
+			//
 	
 	}
-	
+	*/
+	aufzugListe = <- channelAlgA
+	fahrgaesteListe = <- channelAlgP
+
 	fmt.Println(aufzugListe)
 	fmt.Println(fahrgaesteListe)
 	go goroutineP(chanfahrgast,chan_antwort_fahrgast,chanaufzug,chan_antwort_aufzug,chanDonePerRoutine)
