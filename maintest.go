@@ -103,16 +103,17 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 			
 	}
 	channelAlgA <- aufzugListe
+
 	// erzeuge neue Personen
 	GenerierePassagiere(maxPers, channelGP)// übergibt berechnete maximal erlaubte personenanzahl
 	//empfange Nachrichten von GenerierePassagiere
 	for i:=0;i<maxPers;i++{
 		neueAnfragen := <-channelGP // speichere Nachricht in variabel
 		fahrgaesteListe = append(fahrgaesteListe, neueAnfragen)// hänge neue anfrage an fahrgästeliste an
-		
+	
 	}
-	channelAlgP <- fahrgaesteListe
-
+	
+	channelAlgP <- fahrgaesteListe	
 	//starte Simulation
 	// überwacht gesamtlänge der simulation
 
@@ -372,8 +373,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 						fahrgaesteListe[k].status = 11
 						chanfahrgast <- fahrgaesteListe[k]
 						chanaufzug <- aufzugListe[i]
-						fahrgaesteListe = append(fahrgaesteListe[:k], fahrgaesteListe[k:]...)
-						aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+						fahrgaesteListe = append(fahrgaesteListe[:k], fahrgaesteListe[k+1:]...)
+						aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 						break
 					}
 				}
@@ -390,7 +391,7 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
 					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
 					break
 
@@ -401,8 +402,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 					fahrgaesteListe[j].status = 12
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
-					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
 					break
 
@@ -413,8 +414,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 					//fahrgaesteListe[j].status = 1
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
-					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
 					break
 
@@ -424,8 +425,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 					//fahrgaesteListe[j].status = 1
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
-					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
 					break
 					//schritt: zu ziel des gasts runter fahren
@@ -434,8 +435,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 					aufzugListe[i].event = "ziel unten"
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
-					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
 					break
 					//schritt: zu ziel des gasts rauf fahren
@@ -443,8 +444,8 @@ func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan 
 					aufzugListe[i].event = "ziel oben"
 					chanfahrgast <- fahrgaesteListe[j]
 					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j:]...)
-					aufzugListe = append(aufzugListe[:i], aufzugListe[i:]...)
+					fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
+					aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
 					break
 				}
