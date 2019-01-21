@@ -3,16 +3,15 @@ package main
 import (
 	"math/rand"
 	"sync"
-	"fmt"
 )
 
 //-------------------------------------------STRUCTS-------------------------------------------
-//var wg sync.WaitGroup
-//var wg2 sync.WaitGroup
+var wg sync.WaitGroup
+var wg2 sync.WaitGroup
 
 
 var wgSimulationsEnde sync.WaitGroup
-//var warteAufSteuerlogik sync.WaitGroup
+var warteAufSteuerlogik sync.WaitGroup
 
 type Aufzug struct {
 	aufzugNr int // aufzug Nr
@@ -22,7 +21,6 @@ type Aufzug struct {
 	etage int // aktuelle Etage
 	zielEtage int // nächster halt
 	event string // 0 bereit, 1 einsteigend, 2 eingestiegen,3 fahrend, 4 aussteigend, 5 ausgestiegen
-	gueltig bool // aktuell = true, veraltet = false
 }
 type Person struct {
 	wartezeit int//Wartezeit in schritten
@@ -33,7 +31,6 @@ type Person struct {
 	ziel int //Zieletage
 	status int //  0 = wartend auf zuteilung, 1 = zugeteilt, 12 einsteigend, 2 = fahrend, 23 aussteigend, 3 = ausgestiegen
 	aufzugNr int // nr des befördernden aufzugs
-	gueltig bool // aktuell = true, veraltet = false
 }
 type Zentrale struct {
 	anzSim int // anzahl an Simulationsläufen
@@ -49,7 +46,15 @@ type Auswertung struct { // alle aufzüge addiert!!!
 	streckeA int // gesamtstrecke aller Aufzüge addiert
 }
 
+type aufzugUndPerson struct{
+	p [] Person
+	a [] Aufzug
+}
 
+type DatenPersonUndAuf struct{
+	a Aufzug
+	p Person
+}
 
 var channelAuswertungAufzuege= make (chan []Aufzug,1)
 var channelAuswertungPersonen=make(chan []Person,1)
@@ -62,7 +67,7 @@ func ZentraleSteuerlogik() {
 
 	anzahlSimulationsläufe := 1
 	anzahlAufzüge := 4
-	dauer := 100
+	dauer := 10000
 	maxPersonen := 10
 
 	// angegebene anzahl von Simulationsläufen aufrufen, auswertung wird als rückgabewert erhalten und an liste angehängt
@@ -92,8 +97,13 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	// channels erzeugen
 	channelGP := make (chan Person,maxPers)
 	channelGA := make (chan Aufzug,anz)
-	channelAlgP := make (chan []Person, maxPers*4)
-	channelAlgA := make (chan []Aufzug,anz*4)
+
+
+
+
+	aufzugUndPersonCHAN:=make(chan aufzugUndPerson)
+
+
 
 	//generiere Aufzüge
 	GeneriereAufzuege(anz, channelGA) // aufzüge erzeugen
@@ -102,9 +112,9 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	for i:=0;i<anz;i++{
 		neuerAufzug := <-channelGA
 		aufzugListe = append(aufzugListe, neuerAufzug)
-			
+
 	}
-	channelAlgA <- aufzugListe
+
 
 	// erzeuge neue Personen
 	GenerierePassagiere(maxPers, channelGP)// übergibt berechnete maximal erlaubte personenanzahl
@@ -112,36 +122,28 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 	for i:=0;i<maxPers;i++{
 		neueAnfragen := <-channelGP // speichere Nachricht in variabel
 		fahrgaesteListe = append(fahrgaesteListe, neueAnfragen)// hänge neue anfrage an fahrgästeliste an
-	
+
 	}
-	
-	channelAlgP <- fahrgaesteListe	
-	//starte Simulation
-	// überwacht gesamtlänge der simulation
 
 	// algorithmus aufrufen
-	go Aufzugsteuerungs_Agorithmus_1(channelAlgA,channelAuswertungAufzuege, channelAlgP,channelAuswertungPersonen, maxPers, dauer, anz)
+	go Aufzugsteuerungs_Agorithmus_1(aufzugUndPersonCHAN,maxPers, dauer, anz)
 	// auswertung senden
 
-	//Warte auf Aufzugssteuerung
-	aufzugListe = <- channelAuswertungAufzuege
-	fahrgaesteListe = <- channelAuswertungPersonen
+	aufzugUndPersonCHAN<-aufzugUndPerson{fahrgaesteListe,aufzugListe}
 
 
+	a:=<-aufzugUndPersonCHAN
+
+	println("Test",len(a.p),len(a.a))
 
 	//nach beendigung der simulation
 	// erstelle auswertung
 	for i := range aufzugListe{
-		if aufzugListe[i].gueltig == true{
-			auswertung.streckeA += aufzugListe[i].strecke // gesamtstrecke aller Aufzüge addiert
-
-		}
+		auswertung.streckeA += aufzugListe[i].strecke // gesamtstrecke aller Aufzüge addiert
 	}
 	for i := range fahrgaesteListe{
-		if aufzugListe[i].gueltig == true{
 		auswertung.wartezeitP += fahrgaesteListe[i].wartezeit //gesamtwartezeit der passagiere in schritten
 		auswertung.abweichungP += fahrgaesteListe[i].abweichung // gesamtdifferenz von soll- zu ist-strecken der passagiere in schritten
-		}
 	}
 
 
@@ -158,7 +160,7 @@ func GeneriereAufzuege (anzA int, channelGA chan Aufzug){
 	for i := 1; anzA >= i; i++{
 
 
-		neuerAufzug := Aufzug{aufzugNr: i, max: maxPers, event: "aufzug bereit", gueltig : true}
+		neuerAufzug := Aufzug{i,0,maxPers,0,-3,-2,"aufzug bereit"}
 
 		channelGA <- neuerAufzug
 	}
@@ -185,7 +187,7 @@ func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an
 				ungleich = true
 			}
 		}
-		neueAnfrage := Person{start: startEtage, ziel: zielEtage, gueltig : true} // wie macht man einen channel ????????
+		neueAnfrage := Person{0,0,0,0,startEtage,zielEtage	,0,0} // wie macht man einen channel ????????
 
 		channelGP <- neueAnfrage
 
@@ -202,7 +204,7 @@ func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an
 
 //---------------------------------------GOROUTINE PERSON-----------------------------------------------
 
-func goroutineP(channelAlgPerson, chan_antwort_fahrgast chan Person, channelAlgAufzug/*, channelAlgAufzug2 */chan Aufzug,doneChan chan bool){
+func goroutineP(chanMitAlgo chan DatenPersonUndAuf,doneChan chan bool){
 
 	simuLaueft:=true
 	for simuLaueft{
@@ -210,22 +212,16 @@ func goroutineP(channelAlgPerson, chan_antwort_fahrgast chan Person, channelAlgA
 		var aufzug Aufzug
 		var fahrgast Person
 
-		select{ //for i:=0;i<anz*dauer;i++{
-		case msg1 := <- channelAlgAufzug:
-			aufzug = msg1
-		//default:
-		}
-		select{ //for i:=0;i<anz*dauer;i++{
-		case msg2 := <- channelAlgPerson:
-			fahrgast = msg2
-		//default:
-		}
+		neueDaten:=<-chanMitAlgo
 
+		aufzug=neueDaten.a
+		fahrgast= neueDaten.p
 		switch fahrgast.status {
 		case 0: fahrgast.ist += 1
 			fahrgast.wartezeit += 1
 		case 11:
 			if aufzug.event == "aufzug bereit"{
+				//println("Person hat Zielaufzug")
 				fahrgast.status = 1 // fahrgast hat jetzt einen zielaufzug
 				fahrgast.aufzugNr = aufzug.aufzugNr
 				fahrgast.soll = fahrgast.ziel - fahrgast.start
@@ -236,20 +232,23 @@ func goroutineP(channelAlgPerson, chan_antwort_fahrgast chan Person, channelAlgA
 				fahrgast.ist += 1
 				fahrgast.wartezeit += 1
 			}
-		case 1: fahrgast.ist += 1
+		case 1:
+			fahrgast.ist += 1
 			fahrgast.wartezeit += 1
+			//println("Erhöhe um 1")
 		case 12:
 			fahrgast.status = 2
-		case 2: fahrgast.ist += 1
+		case 2:
+			fahrgast.ist += 1
 		case 23:
+			println("Person ist ausgestiegen markiert")
 			fahrgast.status = 3 // fahrgast als ausgestiegen markieren
 			fahrgast.abweichung = fahrgast.ist - fahrgast.soll
-
-		//default:
+		default:
 
 		}
-		//channelAlgAufzug2 <- aufzug
-		chan_antwort_fahrgast <- fahrgast
+
+		chanMitAlgo<-DatenPersonUndAuf{aufzug,fahrgast}
 
 		//Stoppe  Schleife
 		select {
@@ -264,34 +263,31 @@ func goroutineP(channelAlgPerson, chan_antwort_fahrgast chan Person, channelAlgA
 
 //------------------------------------------------------GOROUTINE AUFZUG------------------------------------------------------
 
-func goroutineA(channelAlgPerson/*, channelAlgPerson2*/ chan Person, channelAlgAufzug, chan_antwort_aufzug chan Aufzug, doneChan chan bool){
+func goroutineA(chanMitAlgorithmus chan DatenPersonUndAuf,done chan bool){
 
+
+	//BEKOMMT AUFZUG UND UPDATET NACH EVENT
+	//BEKOMMT PERSON ZIELETAGE
 	simuLaueft:=true
 	for simuLaueft{
-		//aufzug := <- channelAlgAufzug
-		//fahrgast := <- channelAlgPerson
+
 		var aufzug Aufzug
 		var fahrgast Person
-		select{ //for i:=0;i<anz*dauer;i++{
-		case msg1 := <- channelAlgAufzug:
-			aufzug = msg1
-		//default:
-		}
-		select{
-		case msg2 := <- channelAlgPerson: fahrgast = msg2
-		//default:
-		}
 
+		neueDaten:=<-chanMitAlgorithmus
 
+		aufzug=neueDaten.a
+		fahrgast= neueDaten.p
 		switch aufzug.event {
 		case "aufzug bereit":
-			aufzug.zielEtage = fahrgast.start // aufzug erhält neues ziel
+			aufzug.zielEtage = fahrgast.start
+			aufzug.fahrgaeste+=1	// aufzug erhält neues ziel
 		case "aussteigen":
 			//println("aussteigen")
 			aufzug.fahrgaeste -= 1// anzahl der fahrgäste im Aufzug reduzieren
 		case "einsteigen":
-			//println("einsteigen")
-			aufzug.fahrgaeste += 1
+			aufzug.zielEtage=fahrgast.ziel
+			//aufzug.fahrgaeste += 1
 		case "anfrage unten":
 			aufzug.etage -= 1
 			aufzug.strecke += 1 // gesamtstrecke des aufzugs erhöhen
@@ -305,12 +301,13 @@ func goroutineA(channelAlgPerson/*, channelAlgPerson2*/ chan Person, channelAlgA
 			aufzug.etage += 1
 			aufzug.strecke += 1
 		}
-		chan_antwort_aufzug <- aufzug
-		//channelAlgPerson2 <- fahrgast
+
+		chanMitAlgorithmus<- DatenPersonUndAuf{aufzug,fahrgast}
 
 		select { //for i:=0;i<anz*dauer;i++{
-		case msg1 := <-doneChan:
+		case msg1 := <-done:
 			simuLaueft = msg1
+			println("Fertig")
 		default:
 		}
 	}
@@ -322,187 +319,152 @@ func goroutineA(channelAlgPerson/*, channelAlgPerson2*/ chan Person, channelAlgA
 
 //----------------------------------------------ALGORITHMUS------------------------------------------------------------------
 
-func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan []Aufzug, channelAlgP,channelAuswertungPersonen chan []Person, maxPers, dauer, anz int){
+//func Aufzugsteuerungs_Agorithmus_1 (channelAlgA, channelAuswertungAufzuege chan []Aufzug, channelAlgP,channelAuswertungPersonen chan []Person, maxPers, dauer)
+
+
+func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,maxPers int, dauer int ,anz int){
 	aufzugListe := make([]Aufzug,0)
 	fahrgaesteListe := make([]Person,0)
 
+	chanMitAufzug:=make(chan DatenPersonUndAuf)
+	chanMitPerson:=make(chan DatenPersonUndAuf)
 
-	chanfahrgast := make(chan Person,maxPers)
-	chanaufzug := make(chan Aufzug,100)
-	chan_antwort_aufzug := make(chan Aufzug,100)
-	chan_antwort_fahrgast := make(chan Person,maxPers)
 
-	//Channels um Routinen zu stoppen
 	chanDoneAuf:=make(chan bool,1)
 	chanDonePerRoutine:=make(chan bool,1)
-	/*
-	for ;maxPers > 0; maxPers--{
-		select{
-			case msg := <- channelAlgP: fahrgaesteListe = msg
-			default:
-		}
 
-		//
-	}
-	for ;anz > 0; anz --{
-		select{
-			case msg := <- channelAlgA: aufzugListe = msg
-			default:
-			}
-			//
-	
-	}
-	*/
-	aufzugListe = <- channelAlgA
-	fahrgaesteListe = <- channelAlgP
 
-	fmt.Println(aufzugListe)
-	fmt.Println(fahrgaesteListe)
-	go goroutineP(chanfahrgast,chan_antwort_fahrgast,chanaufzug/*,chan_antwort_aufzug*/,chanDonePerRoutine)
-	go goroutineA(chanfahrgast/*,chan_antwort_fahrgast*/,chanaufzug,chan_antwort_aufzug,chanDoneAuf)
+	aUp:=<-aufzugUndPersonChan
+
+	aufzugListe =aUp.a
+	fahrgaesteListe = aUp.p
+
+	go goroutineP(chanMitPerson,chanDonePerRoutine)
+	go goroutineA(chanMitAufzug,chanDoneAuf)
+
 
 	for ; dauer >= 0; dauer--{
-
-		antwort_fahrgast := <- chan_antwort_fahrgast
-		antwort_aufzug := <- chan_antwort_aufzug
-		fahrgaesteListe = append(fahrgaesteListe, antwort_fahrgast)
-		aufzugListe = append(aufzugListe,antwort_aufzug)
-
 		for i := range aufzugListe {
 			// planung
-
-			if aufzugListe[i].gueltig == true{
-				
-			
 			if aufzugListe[i].fahrgaeste == 0{
 				//aufzug leer? dann erhalte neue anfrage
 				for k:= range fahrgaesteListe{
-
-					if fahrgaesteListe[k].status == 0 && fahrgaesteListe[k].gueltig == true{ // nehme ersten wartenden fahrgast
-
+					if fahrgaesteListe[k].status == 0{ // nehme ersten wartenden fahrgast
 						aufzugListe[i].event = "aufzug bereit"
+						chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[k]}
+						antwort:=<-chanMitAufzug
+						aufzugListe[i]=antwort.a
+
 						fahrgaesteListe[k].status = 11
-						chanfahrgast <- fahrgaesteListe[k]
-						chanaufzug <- aufzugListe[i]
-						fahrgaesteListe[k].gueltig = false
-						aufzugListe[i].gueltig = false
-						//fahrgaesteListe = append(fahrgaesteListe[:k], fahrgaesteListe[k+1:]...)
-						//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
+						chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[k]}
+
+						antwortPerson:=<-chanMitPerson
+						fahrgaesteListe[k]=antwortPerson.p
+						//println("Aufzug",aufzugListe[i].aufzugNr,"Aufzugfahrgäste",aufzugListe[i].fahrgaeste)
 						break
 					}
 				}
 			}
 
 			// ausführung
+
 			for j:= range fahrgaesteListe{
+				//schritt: aussteigen lassen
 
-				if fahrgaesteListe[j].gueltig == true{
-
-				// schritt: aussteigen lassen
 				if aufzugListe[i].etage == fahrgaesteListe[j].ziel && fahrgaesteListe[j].status == 2 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
-
+					println("Jmd steigt Aus")
 					aufzugListe[i].event = "aussteigen"
 					fahrgaesteListe[j].status = 23
-					chanfahrgast <- fahrgaesteListe[j]
-					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe[j].gueltig = false
-						aufzugListe[i].gueltig = false
-					//fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
-
-					break
-
+					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortAufzug:=<-chanMitAufzug
+					chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					aufzugListe[i]=antwortAufzug.a
+					fahrgaesteListe[j]=antwortPerson.p
 					// schritt: einsteigen lassen
-				}else if aufzugListe[i].etage == fahrgaesteListe[j].start && fahrgaesteListe[j].status == 1 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
-
+				} else if aufzugListe[i].etage == fahrgaesteListe[j].start && fahrgaesteListe[j].status == 1 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
+					//println("Einsteigen")
 					aufzugListe[i].event = "einsteigen"
 					fahrgaesteListe[j].status = 12
-					chanfahrgast <- fahrgaesteListe[j]
-					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe[j].gueltig = false
-					aufzugListe[i].gueltig = false
-					//fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
-
-					break
+					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortAufzug:=<-chanMitAufzug
+					chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					aufzugListe[i]=antwortAufzug.a
+					fahrgaesteListe[j]=antwortPerson.p
+					//println("Status",fahrgaesteListe[j].status)
 
 					//schritt: zu anfrage runter fahren
 				}else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug runter fahren
-
+					//println("Anfrage Unten")
 					aufzugListe[i].event = "anfrage unten"
-					//fahrgaesteListe[j].status = 1
-					chanfahrgast <- fahrgaesteListe[j]
-					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe[j].gueltig = false
-					aufzugListe[i].gueltig = false
-					//fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
-					break
+					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortAufzug:=<-chanMitAufzug
+					chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					aufzugListe[i]=antwortAufzug.a
+					fahrgaesteListe[j]=antwortPerson.p
+
 
 					//schritt: zu anfrage rauf fahren
 				}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug rauf fahren
+
+					//println("Anfrage Oben")
 					aufzugListe[i].event = "anfrage oben"
-					//fahrgaesteListe[j].status = 1
-					chanfahrgast <- fahrgaesteListe[j]
-					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe[j].gueltig = false
-					aufzugListe[i].gueltig = false
-					//fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
-					break
+					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortAufzug:=<-chanMitAufzug
+					chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					aufzugListe[i]=antwortAufzug.a
+					fahrgaesteListe[j]=antwortPerson.p
+
+
 					//schritt: zu ziel des gasts runter fahren
-				}else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
-
+					} else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
+						//println("Ziel Unten")
 					aufzugListe[i].event = "ziel unten"
-					chanfahrgast <- fahrgaesteListe[j]
-					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe[j].gueltig = false
-					aufzugListe[i].gueltig = false
-					//fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
-					break
+					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortAufzug:=<-chanMitAufzug
+					chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					aufzugListe[i]=antwortAufzug.a
+					fahrgaesteListe[j]=antwortPerson.p
+
+
+
 					//schritt: zu ziel des gasts rauf fahren
-				}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
+					}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
+					//println("Ziel Oben")
 					aufzugListe[i].event = "ziel oben"
-					chanfahrgast <- fahrgaesteListe[j]
-					chanaufzug <- aufzugListe[i]
-					fahrgaesteListe[j].gueltig = false
-					aufzugListe[i].gueltig = false
-					//fahrgaesteListe = append(fahrgaesteListe[:j], fahrgaesteListe[j+1:]...)
-					//aufzugListe = append(aufzugListe[:i], aufzugListe[i+1:]...)
 
-					break
+					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortAufzug:=<-chanMitAufzug
+					chanMitPerson<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					aufzugListe[i]=antwortAufzug.a
+					fahrgaesteListe[j]=antwortPerson.p
+
 				}
 
+
 			}
-			}
-		}
 
 		}
-		select{
-		case msg1 := <- chan_antwort_fahrgast:
-			fahrgaesteListe = append(fahrgaesteListe,msg1)
-		case msg2 := <- chan_antwort_aufzug:
-			aufzugListe = append(aufzugListe,msg2)
-		//default:
-		}
+
 
 
 	}
 
 	chanDoneAuf<-false
 	chanDonePerRoutine<-false
-	//fmt.Println(aufzugListe)
-	//fmt.Println(fahrgaesteListe)
-	channelAuswertungPersonen <- fahrgaesteListe
-	channelAuswertungAufzuege <- aufzugListe
+	aufzugUndPersonChan<-aufzugUndPerson{fahrgaesteListe,aufzugListe}
 
 }
 
-//}
+
 
 
 //----------------------------------------------------MAIN--------------------------------------------------
