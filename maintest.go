@@ -45,6 +45,7 @@ type Auswertung struct { // alle aufzüge addiert!!!
 	wartezeitP int //gesamtwartezeit der passagiere in schritten
 	abweichungP int // gesamtdifferenz von soll- zu ist-strecken der passagiere in schritten
 	streckeA int // gesamtstrecke aller Aufzüge addiert
+	nichtAngekommen int // personen, deren anfrage nicht beendet werden konnte vor simulationsende
 }
 
 type aufzugUndPerson struct{
@@ -67,9 +68,9 @@ func ZentraleSteuerlogik() {
 	auswertungsListe := make([]Auswertung,0)
 
 	anzahlSimulationsläufe := 1
-	anzahlAufzüge := 1
-	dauer := 20
-	maxPersonen := 2
+	anzahlAufzüge := 7
+	dauer := 1000
+	maxPersonen := 30
 
 	// angegebene anzahl von Simulationsläufen aufrufen, auswertung wird als rückgabewert erhalten und an liste angehängt
 	for i := 0; anzahlSimulationsläufe > i; i++{
@@ -77,7 +78,7 @@ func ZentraleSteuerlogik() {
 		auswertung :=  Steuersimulation(anzahlAufzüge,dauer,maxPersonen)
 		auswertungsListe = append(auswertungsListe,auswertung)
 
-		println("Abweichung Personen",auswertung.abweichungP,"Strecke Aufzug=",auswertung.streckeA,"Wartezeit P=",auswertung.wartezeitP)
+		println("Abweichung Personen = ",auswertung.abweichungP,", Strecke Aufzug = ",auswertung.streckeA,", Wartezeit Personen = ",auswertung.wartezeitP, ", nicht Angekommen = ", auswertung.nichtAngekommen)
 	}
 
 	wgSimulationsEnde.Done() //Hier angekommen, sind die Simulationenfertig
@@ -118,14 +119,14 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 
 
 	// erzeuge neue Personen
-	GenerierePassagiere(maxPers, channelGP)// übergibt berechnete maximal erlaubte personenanzahl
+	GenerierePassagiere(maxPers, dauer, channelGP)// übergibt berechnete maximal erlaubte personenanzahl
 	//empfange Nachrichten von GenerierePassagiere
 	for i:=0;i<maxPers;i++{
 		neueAnfragen := <-channelGP // speichere Nachricht in variabel
 		fahrgaesteListe = append(fahrgaesteListe, neueAnfragen)// hänge neue anfrage an fahrgästeliste an
 
 	}
-
+	fmt.Println(fahrgaesteListe)
 	// algorithmus aufrufen
 	go Aufzugsteuerungs_Agorithmus_1(aufzugUndPersonCHAN,maxPers, dauer, anz)
 	// auswertung senden
@@ -143,8 +144,16 @@ func Steuersimulation (anz, dauer, maxPers int/*, algorithmus func()*/)(auswertu
 		auswertung.streckeA += aufzugListe[i].strecke // gesamtstrecke aller Aufzüge addiert
 	}
 	for i := range fahrgaesteListe{
-		auswertung.wartezeitP += fahrgaesteListe[i].wartezeit //gesamtwartezeit der passagiere in schritten
-		auswertung.abweichungP += fahrgaesteListe[i].abweichung // gesamtdifferenz von soll- zu ist-strecken der passagiere in schritten
+
+		if fahrgaesteListe[i].wartezeit >= 0 && fahrgaesteListe[i].status == 3{
+			auswertung.wartezeitP += fahrgaesteListe[i].wartezeit //gesamtwartezeit der passagiere in schritten
+			auswertung.abweichungP += fahrgaesteListe[i].abweichung // gesamtdifferenz von soll- zu ist-strecken der passagiere in schritten
+	
+		}else{
+			auswertung.nichtAngekommen += 1
+		}
+		
+		
 	}
 
 
@@ -161,7 +170,7 @@ func GeneriereAufzuege (anzA int, channelGA chan Aufzug){
 	for i := 1; anzA >= i; i++{
 
 
-		neuerAufzug := Aufzug{i,0,maxPers,0,-3,-2,"aufzug bereit"}
+		neuerAufzug := Aufzug{i,0,maxPers,0,0,0,"aufzug bereit"}
 
 		channelGA <- neuerAufzug
 	}
@@ -173,12 +182,16 @@ func GeneriereAufzuege (anzA int, channelGA chan Aufzug){
 
 //------------------------------------------GENERIERE PASSAGIERE-----------------------------------------------------
 
-func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an personen je schritt und anzahl etagen geändert werden
+func GenerierePassagiere(max, dauer int, channelGP chan Person){ // hier kann anzahl an personen je schritt und anzahl etagen geändert werden
 
+	i := 0
+	verzoegerung := 0
+	gruppengroesse := 3
 	for ; max > 0; max--{
 
 		startEtage := rand.Intn(4)
 		zielEtage := 0
+		
 
 
 		for ungleich := false; ungleich == false;{ // damit start und zieletage nicht gleich sind
@@ -188,10 +201,14 @@ func GenerierePassagiere(max int, channelGP chan Person){ // hier kann anzahl an
 				ungleich = true
 			}
 		}
-		neueAnfrage := Person{0,0,0,0,startEtage,zielEtage	,0,0} // wie macht man einen channel ????????
+		if i == gruppengroesse{
+			verzoegerung -= gruppengroesse*2
+			i = -1
+		}
+		neueAnfrage := Person{verzoegerung,0,0,0,startEtage,zielEtage,0,0} // wie macht man einen channel ????????
 
 		channelGP <- neueAnfrage
-
+		i++
 
 	}
 
@@ -218,7 +235,7 @@ func goroutineP(chanMitAlgo chan DatenPersonUndAuf,doneChan chan bool){
 		aufzug=neueDaten.a
 		fahrgast= neueDaten.p
 		switch fahrgast.status {
-		case 0: fahrgast.ist += 1
+		case 0: //fahrgast.ist += 1
 			fahrgast.wartezeit += 1
 		case 11:
 			if aufzug.event == "aufzug bereit"{
@@ -230,11 +247,11 @@ func goroutineP(chanMitAlgo chan DatenPersonUndAuf,doneChan chan bool){
 					fahrgast.soll = fahrgast.soll *-1 // negative werte umkehren
 				}
 			}else{
-				fahrgast.ist += 1
+				//fahrgast.ist += 1
 				fahrgast.wartezeit += 1
 			}
 		case 1:
-			fahrgast.ist += 1
+			//fahrgast.ist += 1
 			fahrgast.wartezeit += 1
 			//println("Erhöhe um 1")
 		case 12:
@@ -242,7 +259,7 @@ func goroutineP(chanMitAlgo chan DatenPersonUndAuf,doneChan chan bool){
 		case 2:
 			fahrgast.ist += 1
 		case 23:
-			println("Person ist ausgestiegen markiert")
+			//println("Person ist ausgestiegen markiert")
 			fahrgast.status = 3 // fahrgast als ausgestiegen markieren
 			fahrgast.abweichung = fahrgast.ist - fahrgast.soll
 		default:
@@ -345,16 +362,21 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 
 
 	for ; dauer >= 0; dauer--{
+
+		//fmt.Println("Schritt")
+
 		for i := range aufzugListe {
 
-			fmt.Println("for i range Aufzugliste ", aufzugListe)
+			//fmt.Println("for i range Aufzugliste ", aufzugListe)
 			// planung
 			if aufzugListe[i].fahrgaeste == 0{
 				//aufzug leer? dann erhalte neue anfrage
 				for k:= range fahrgaesteListe{
-					if fahrgaesteListe[k].status == 0{ // nehme ersten wartenden fahrgast
 
-						fmt.Println("for k range fahrgästeliste ", fahrgaesteListe)
+					
+					if fahrgaesteListe[k].status == 0 && fahrgaesteListe[k].wartezeit >= 0{ // nehme ersten wartenden fahrgast
+
+						//fmt.Println("for k range fahrgästeliste ", fahrgaesteListe)
 
 						aufzugListe[i].event = "aufzug bereit"
 						chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[k]}
@@ -369,18 +391,22 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 						//println("Aufzug",aufzugListe[i].aufzugNr,"Aufzugfahrgäste",aufzugListe[i].fahrgaeste)
 						break
 					}
+					
+					
 				}
 			}
 
 			// ausführung
 
 			for j:= range fahrgaesteListe{
+
+
 				//schritt: aussteigen lassen
-				fmt.Println("for k range fahrgästeliste ", fahrgaesteListe)
+				//fmt.Println("for k range fahrgästeliste ", fahrgaesteListe)
+				
 
-
-				if aufzugListe[i].etage == fahrgaesteListe[j].ziel && fahrgaesteListe[j].status == 2 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
-					println("Jmd steigt Aus")
+				if fahrgaesteListe[j].wartezeit >= 0 && aufzugListe[i].etage == fahrgaesteListe[j].ziel && fahrgaesteListe[j].status == 2 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
+					//println("Jmd steigt Aus")
 					aufzugListe[i].event = "aussteigen"
 					fahrgaesteListe[j].status = 23
 					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
@@ -389,9 +415,9 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 					antwortPerson:=<-chanMitPerson
 					aufzugListe[i]=antwortAufzug.a
 					fahrgaesteListe[j]=antwortPerson.p
-					// schritt: einsteigen lassen
-				} else if aufzugListe[i].etage == fahrgaesteListe[j].start && fahrgaesteListe[j].status == 1 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
-					//println("Einsteigen")
+						// schritt: einsteigen lassen
+				} else if fahrgaesteListe[j].wartezeit >= 0 && aufzugListe[i].etage == fahrgaesteListe[j].start && fahrgaesteListe[j].status == 1 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
+						//println("Einsteigen")
 					aufzugListe[i].event = "einsteigen"
 					fahrgaesteListe[j].status = 12
 					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
@@ -402,8 +428,8 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 					fahrgaesteListe[j]=antwortPerson.p
 					//println("Status",fahrgaesteListe[j].status)
 
-					//schritt: zu anfrage runter fahren
-				}else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug runter fahren
+						//schritt: zu anfrage runter fahren
+				}else if fahrgaesteListe[j].wartezeit >= 0 && aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug runter fahren
 					//println("Anfrage Unten")
 					aufzugListe[i].event = "anfrage unten"
 
@@ -415,8 +441,8 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 					fahrgaesteListe[j]=antwortPerson.p
 
 
-					//schritt: zu anfrage rauf fahren
-				}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug rauf fahren
+						//schritt: zu anfrage rauf fahren
+				}else if fahrgaesteListe[j].wartezeit >= 0 && aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 1{ // aufzug rauf fahren
 
 					//println("Anfrage Oben")
 					aufzugListe[i].event = "anfrage oben"
@@ -429,10 +455,10 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 					fahrgaesteListe[j]=antwortPerson.p
 
 
-					//schritt: zu ziel des gasts runter fahren
-					} else if aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
-						//println("Ziel Unten")
-					aufzugListe[i].event = "ziel unten"
+						//schritt: zu ziel des gasts runter fahren
+				} else if fahrgaesteListe[j].wartezeit >= 0 && aufzugListe[i].etage > aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
+							//println("Ziel Unten")
+					aufzugListe[i].event = "ziel unten"	
 
 					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
 					antwortAufzug:=<-chanMitAufzug
@@ -443,9 +469,9 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 
 
 
-					//schritt: zu ziel des gasts rauf fahren
-					}else if aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
-					//println("Ziel Oben")
+						//schritt: zu ziel des gasts rauf fahren
+				}else if fahrgaesteListe[j].wartezeit >= 0 && aufzugListe[i].etage < aufzugListe[i].zielEtage && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr && fahrgaesteListe[j].status == 2{
+						//println("Ziel Oben")
 					aufzugListe[i].event = "ziel oben"
 
 					chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[j]}
@@ -456,14 +482,22 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 					fahrgaesteListe[j]=antwortPerson.p
 
 				}
-
-
+					
+				
+				
 			}
 
 		}
+			
+				for j := range fahrgaesteListe{
+					if fahrgaesteListe[j].status == 0{
+						chanMitPerson<-DatenPersonUndAuf{aufzugListe[0],fahrgaesteListe[j]}
+					antwortPerson:=<-chanMitPerson
+					fahrgaesteListe[j]=antwortPerson.p
+					}
+				}
 
-
-
+			
 	}
 
 	chanDoneAuf<-false
