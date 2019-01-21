@@ -3,6 +3,7 @@ package main
 import (
 	"math/rand"
 	"sync"
+	"fmt"
 )
 
 //-------------------------------------------STRUCTS-------------------------------------------
@@ -66,9 +67,9 @@ func ZentraleSteuerlogik() {
 	auswertungsListe := make([]Auswertung,0)
 
 	anzahlSimulationsläufe := 1
-	anzahlAufzüge := 4
-	dauer := 10000
-	maxPersonen := 10
+	anzahlAufzüge := 1
+	dauer := 20
+	maxPersonen := 2
 
 	// angegebene anzahl von Simulationsläufen aufrufen, auswertung wird als rückgabewert erhalten und an liste angehängt
 	for i := 0; anzahlSimulationsläufe > i; i++{
@@ -345,11 +346,16 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 
 	for ; dauer >= 0; dauer--{
 		for i := range aufzugListe {
+
+			fmt.Println("for i range Aufzugliste ", aufzugListe)
 			// planung
 			if aufzugListe[i].fahrgaeste == 0{
 				//aufzug leer? dann erhalte neue anfrage
 				for k:= range fahrgaesteListe{
 					if fahrgaesteListe[k].status == 0{ // nehme ersten wartenden fahrgast
+
+						fmt.Println("for k range fahrgästeliste ", fahrgaesteListe)
+
 						aufzugListe[i].event = "aufzug bereit"
 						chanMitAufzug<-DatenPersonUndAuf{aufzugListe[i],fahrgaesteListe[k]}
 						antwort:=<-chanMitAufzug
@@ -370,6 +376,8 @@ func Aufzugsteuerungs_Agorithmus_1 (aufzugUndPersonChan chan aufzugUndPerson,max
 
 			for j:= range fahrgaesteListe{
 				//schritt: aussteigen lassen
+				fmt.Println("for k range fahrgästeliste ", fahrgaesteListe)
+
 
 				if aufzugListe[i].etage == fahrgaesteListe[j].ziel && fahrgaesteListe[j].status == 2 && aufzugListe[i].aufzugNr == fahrgaesteListe[j].aufzugNr{
 					println("Jmd steigt Aus")
